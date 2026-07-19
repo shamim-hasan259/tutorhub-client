@@ -3,13 +3,14 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, Heart, Brain, User, LogOut, Calendar, CalendarDays
+  LayoutDashboard, Heart, Brain, User, LogOut, Calendar, CalendarDays, Star
 } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 
 const sidebarLinks = [
   { href: '/student/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/student/bookings', label: 'My Bookings', icon: Calendar },
+  { href: '/student/reviews', label: 'My Reviews', icon: Star },
   { href: '/student/saved-tutors', label: 'Saved Tutors', icon: Heart },
   { href: '/student/ai-recommendations', label: 'AI Recommendations', icon: Brain },
   { href: '/student/study-plan', label: 'Study Plan', icon: CalendarDays },

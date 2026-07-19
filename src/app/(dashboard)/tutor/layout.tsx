@@ -10,6 +10,7 @@ import { cn } from '@/utils/helpers';
 const sidebarLinks = [
   { href: '/tutor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/tutor/bookings', label: 'Bookings', icon: ClipboardList },
+  { href: '/tutor/reviews', label: 'Reviews', icon: Star },
   { href: '/tutor/profile', label: 'Manage Profile', icon: User },
   { href: '/tutor/subjects', label: 'Subjects', icon: BookOpen },
   { href: '/tutor/availability', label: 'Availability', icon: Calendar },
