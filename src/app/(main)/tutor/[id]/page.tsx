@@ -5,12 +5,13 @@ import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import {
   Star, MapPin, Clock, BookOpen, GraduationCap, Briefcase,
-  Calendar, MessageSquare, Heart, Share2, ChevronLeft
+  Calendar, MessageSquare, Share2, ChevronLeft
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { formatCurrency } from '@/utils/helpers';
 import ReviewList from '@/components/tutor/ReviewList';
 import RelatedTutors from '@/components/tutor/RelatedTutors';
+import BookmarkButton from '@/components/ui/BookmarkButton';
 import type { Tutor, Review } from '@/types';
 
 export default function TutorDetailsPage() {
@@ -20,7 +21,6 @@ export default function TutorDetailsPage() {
   const [tutor, setTutor] = useState<Tutor | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isSaved, setIsSaved] = useState(false);
 
   useEffect(() => {
     const fetchTutor = async () => {
@@ -39,19 +39,6 @@ export default function TutorDetailsPage() {
 
     fetchTutor();
   }, [tutorId]);
-
-  const toggleSave = async () => {
-    try {
-      if (isSaved) {
-        await api.delete(`/bookmarks/${tutorId}`);
-      } else {
-        await api.post(`/bookmarks/${tutorId}`);
-      }
-      setIsSaved(!isSaved);
-    } catch (error) {
-      console.error('Failed to toggle save:', error);
-    }
-  };
 
   if (loading) {
     return (
@@ -129,14 +116,7 @@ export default function TutorDetailsPage() {
                       <p className="text-primary font-medium mt-1">{tutor.title}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={toggleSave}
-                        className={`p-2 rounded-lg border transition-colors ${
-                          isSaved ? 'bg-primary/10 border-primary text-primary' : 'border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <Heart className={`w-5 h-5 ${isSaved ? 'fill-current' : ''}`} />
-                      </button>
+                      <BookmarkButton tutorId={tutorId} size="md" />
                       <button className="p-2 rounded-lg border border-gray-200 hover:bg-gray-50 transition-colors">
                         <Share2 className="w-5 h-5 text-gray-600" />
                       </button>
