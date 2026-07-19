@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Search, SlidersHorizontal, X, ChevronDown } from 'lucide-react';
+import { Search, SlidersHorizontal, X, Star, CheckCircle, RotateCcw } from 'lucide-react';
 import { useDebounce } from '@/hooks/useDebounce';
 import api from '@/lib/axios';
 import TutorCard from '@/components/tutor/TutorCard';
@@ -12,6 +12,7 @@ import type { Tutor, Pagination } from '@/types';
 const subjects = [
   'Mathematics', 'English', 'Physics', 'Chemistry', 'Biology',
   'Computer Science', 'History', 'Geography', 'Art', 'Music',
+  'Economics', 'Psychology', 'Sociology', 'Philosophy', 'Languages',
 ];
 
 const teachingModes = [
@@ -35,6 +36,20 @@ const priceRanges = [
   { min: 100, max: undefined, label: '$100+' },
 ];
 
+const ratingOptions = [
+  { value: 4.5, label: '4.5 & up' },
+  { value: 4.0, label: '4.0 & up' },
+  { value: 3.5, label: '3.5 & up' },
+  { value: 0, label: 'All ratings' },
+];
+
+const experienceOptions = [
+  { value: '10', label: '10+ years' },
+  { value: '5', label: '5+ years' },
+  { value: '3', label: '3+ years' },
+  { value: '1', label: '1+ years' },
+];
+
 export default function ExplorePage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -53,6 +68,9 @@ export default function ExplorePage() {
   const [page, setPage] = useState(Number(searchParams.get('page')) || 1);
   const [minPrice, setMinPrice] = useState(searchParams.get('minPrice') || '');
   const [maxPrice, setMaxPrice] = useState(searchParams.get('maxPrice') || '');
+  const [minRating, setMinRating] = useState(Number(searchParams.get('minRating')) || 0);
+  const [minExperience, setMinExperience] = useState(searchParams.get('minExperience') || '');
+  const [verifiedOnly, setVerifiedOnly] = useState(searchParams.get('verifiedOnly') === 'true');
 
   const debouncedSearch = useDebounce(search, 500);
 
@@ -67,8 +85,11 @@ export default function ExplorePage() {
     if (page > 1) params.set('page', String(page));
     if (minPrice) params.set('minPrice', minPrice);
     if (maxPrice) params.set('maxPrice', maxPrice);
+    if (minRating) params.set('minRating', String(minRating));
+    if (minExperience) params.set('minExperience', minExperience);
+    if (verifiedOnly) params.set('verifiedOnly', 'true');
     return params.toString();
-  }, [search, subject, location, teachingMode, sort, page, minPrice, maxPrice]);
+  }, [search, subject, location, teachingMode, sort, page, minPrice, maxPrice, minRating, minExperience, verifiedOnly]);
 
   // Fetch tutors
   const fetchTutors = useCallback(async () => {
@@ -115,9 +136,14 @@ export default function ExplorePage() {
     setPage(1);
     setMinPrice('');
     setMaxPrice('');
+    setMinRating(0);
+    setMinExperience('');
+    setVerifiedOnly(false);
   };
 
-  const hasActiveFilters = search || subject || location || teachingMode || minPrice || maxPrice;
+  const hasActiveFilters = search || subject || location || teachingMode || minPrice || maxPrice || minRating || minExperience || verifiedOnly;
+
+  const activeFilterCount = [subject, location, teachingMode, minPrice, minRating, minExperience, verifiedOnly].filter(Boolean).length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -164,6 +190,12 @@ export default function ExplorePage() {
               setMinPrice={setMinPrice}
               maxPrice={maxPrice}
               setMaxPrice={setMaxPrice}
+              minRating={minRating}
+              setMinRating={setMinRating}
+              minExperience={minExperience}
+              setMinExperience={setMinExperience}
+              verifiedOnly={verifiedOnly}
+              setVerifiedOnly={setVerifiedOnly}
               setPage={setPage}
             />
           </aside>
@@ -179,14 +211,20 @@ export default function ExplorePage() {
                 >
                   <SlidersHorizontal className="w-4 h-4" />
                   Filters
+                  {activeFilterCount > 0 && (
+                    <span className="w-5 h-5 bg-primary text-white text-xs rounded-full flex items-center justify-center">
+                      {activeFilterCount}
+                    </span>
+                  )}
                 </button>
 
                 {hasActiveFilters && (
                   <button
                     onClick={clearFilters}
-                    className="text-sm text-primary hover:text-primary/80 font-medium"
+                    className="flex items-center gap-1 text-sm text-primary hover:text-primary/80 font-medium"
                   >
-                    Clear all filters
+                    <RotateCcw className="w-4 h-4" />
+                    Clear all
                   </button>
                 )}
               </div>
@@ -224,6 +262,15 @@ export default function ExplorePage() {
                     label={`${minPrice ? `$${minPrice}` : '$0'} - ${maxPrice ? `$${maxPrice}` : '∞'}`}
                     onRemove={() => { setMinPrice(''); setMaxPrice(''); }}
                   />
+                )}
+                {minRating > 0 && (
+                  <FilterTag label={`${minRating}+ stars`} onRemove={() => setMinRating(0)} />
+                )}
+                {minExperience && (
+                  <FilterTag label={`${minExperience}+ years exp`} onRemove={() => setMinExperience('')} />
+                )}
+                {verifiedOnly && (
+                  <FilterTag label="Verified only" onRemove={() => setVerifiedOnly(false)} />
                 )}
               </div>
             )}
@@ -333,14 +380,28 @@ export default function ExplorePage() {
                 setMinPrice={setMinPrice}
                 maxPrice={maxPrice}
                 setMaxPrice={setMaxPrice}
+                minRating={minRating}
+                setMinRating={setMinRating}
+                minExperience={minExperience}
+                setMinExperience={setMinExperience}
+                verifiedOnly={verifiedOnly}
+                setVerifiedOnly={setVerifiedOnly}
                 setPage={setPage}
               />
-              <button
-                onClick={() => setShowFilters(false)}
-                className="w-full mt-6 px-4 py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary/90 transition-colors"
-              >
-                Apply Filters
-              </button>
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={clearFilters}
+                  className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 font-medium rounded-xl hover:bg-gray-200 transition-colors"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => setShowFilters(false)}
+                  className="flex-1 px-4 py-3 bg-primary text-white font-medium rounded-xl hover:bg-primary/90 transition-colors"
+                >
+                  Apply Filters
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -356,6 +417,9 @@ function FilterPanel({
   teachingMode, setTeachingMode,
   minPrice, setMinPrice,
   maxPrice, setMaxPrice,
+  minRating, setMinRating,
+  minExperience, setMinExperience,
+  verifiedOnly, setVerifiedOnly,
   setPage,
 }: {
   subject: string; setSubject: (v: string) => void;
@@ -363,10 +427,66 @@ function FilterPanel({
   teachingMode: string; setTeachingMode: (v: string) => void;
   minPrice: string; setMinPrice: (v: string) => void;
   maxPrice: string; setMaxPrice: (v: string) => void;
+  minRating: number; setMinRating: (v: number) => void;
+  minExperience: string; setMinExperience: (v: string) => void;
+  verifiedOnly: boolean; setVerifiedOnly: (v: boolean) => void;
   setPage: (v: number) => void;
 }) {
   return (
     <div className="space-y-6">
+      {/* Verified Only Toggle */}
+      <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl">
+        <div className="flex items-center gap-2">
+          <CheckCircle className="w-5 h-5 text-primary" />
+          <span className="font-medium text-gray-900">Verified Tutors Only</span>
+        </div>
+        <button
+          onClick={() => { setVerifiedOnly(!verifiedOnly); setPage(1); }}
+          className={cn(
+            'w-12 h-6 rounded-full transition-colors relative',
+            verifiedOnly ? 'bg-primary' : 'bg-gray-300'
+          )}
+        >
+          <span
+            className={cn(
+              'absolute top-1 w-4 h-4 bg-white rounded-full transition-transform',
+              verifiedOnly ? 'left-7' : 'left-1'
+            )}
+          />
+        </button>
+      </div>
+
+      {/* Rating Filter */}
+      <div>
+        <h3 className="font-medium text-gray-900 mb-3 flex items-center gap-2">
+          <Star className="w-4 h-4 text-amber-400" />
+          Minimum Rating
+        </h3>
+        <div className="space-y-2">
+          {ratingOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => { setMinRating(option.value); setPage(1); }}
+              className={cn(
+                'w-full px-3 py-2 text-left text-sm rounded-lg border transition-colors flex items-center gap-2',
+                minRating === option.value
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-white border-gray-200 hover:bg-gray-50'
+              )}
+            >
+              {option.value > 0 && (
+                <div className="flex gap-0.5">
+                  {Array.from({ length: Math.floor(option.value) }).map((_, i) => (
+                    <Star key={i} className="w-3 h-3 text-amber-400 fill-amber-400" />
+                  ))}
+                </div>
+              )}
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Subject Filter */}
       <div>
         <h3 className="font-medium text-gray-900 mb-3">Subject</h3>
@@ -414,6 +534,27 @@ function FilterPanel({
               )}
             >
               {range.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Experience Filter */}
+      <div>
+        <h3 className="font-medium text-gray-900 mb-3">Experience</h3>
+        <div className="space-y-2">
+          {experienceOptions.map((option) => (
+            <button
+              key={option.value}
+              onClick={() => { setMinExperience(minExperience === option.value ? '' : option.value); setPage(1); }}
+              className={cn(
+                'w-full px-3 py-2 text-left text-sm rounded-lg border transition-colors',
+                minExperience === option.value
+                  ? 'bg-primary/10 border-primary text-primary'
+                  : 'bg-white border-gray-200 hover:bg-gray-50'
+              )}
+            >
+              {option.label}
             </button>
           ))}
         </div>
