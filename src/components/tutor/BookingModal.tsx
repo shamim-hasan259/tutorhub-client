@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { X, Calendar, Clock, ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { useState } from 'react';
+import { X, Calendar, Clock, Check, CreditCard } from 'lucide-react';
 import api from '@/lib/axios';
 import { cn } from '@/utils/helpers';
-import type { Tutor, Availability } from '@/types';
+import PaymentForm from '@/components/payment/PaymentForm';
+import type { Tutor } from '@/types';
 
 interface BookingModalProps {
   tutor: Tutor;
@@ -26,7 +27,7 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
   const [subject, setSubject] = useState('');
   const [notes, setNotes] = useState('');
   const [loading, setLoading] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [bookingId, setBookingId] = useState('');
   const [error, setError] = useState('');
 
   const user = typeof tutor.userId === 'object' ? tutor.userId : null;
@@ -66,7 +67,7 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
     });
   };
 
-  const handleBooking = async () => {
+  const handleCreateBooking = async () => {
     if (!selectedDate || !selectedTime || !subject) {
       setError('Please fill in all required fields');
       return;
@@ -76,19 +77,25 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
     setError('');
 
     try {
-      await api.post('/bookings', {
+      const response = await api.post('/bookings', {
         tutorId: tutor._id,
         date: selectedDate.toISOString(),
         time: selectedTime,
         subject,
         notes,
       });
-      setSuccess(true);
+      setBookingId(response.data.data._id);
+      setStep(4); // Move to payment step
     } catch (err: any) {
       setError(err.response?.data?.message || 'Failed to create booking');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePaymentSuccess = () => {
+    resetModal();
+    onClose();
   };
 
   const resetModal = () => {
@@ -97,7 +104,7 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
     setSelectedTime('');
     setSubject('');
     setNotes('');
-    setSuccess(false);
+    setBookingId('');
     setError('');
   };
 
@@ -115,7 +122,9 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-gray-100">
           <div>
-            <h2 className="text-xl font-semibold text-gray-900">Book a Session</h2>
+            <h2 className="text-xl font-semibold text-gray-900">
+              {step === 4 ? 'Payment' : 'Book a Session'}
+            </h2>
             <p className="text-sm text-gray-500">with {user?.name || 'Tutor'}</p>
           </div>
           <button
@@ -126,28 +135,9 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
           </button>
         </div>
 
-        {success ? (
-          <div className="p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Check className="w-8 h-8 text-green-600" />
-            </div>
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">Booking Confirmed!</h3>
-            <p className="text-gray-600 mb-2">
-              Your session with {user?.name} has been booked.
-            </p>
-            <p className="text-sm text-gray-500 mb-6">
-              {selectedDate?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} at {selectedTime}
-            </p>
-            <button
-              onClick={handleClose}
-              className="px-6 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors"
-            >
-              Done
-            </button>
-          </div>
-        ) : (
-          <div className="p-6">
-            {/* Progress Steps */}
+        <div className="p-6">
+          {/* Progress Steps */}
+          {step < 4 && (
             <div className="flex items-center justify-center mb-8">
               {[1, 2, 3].map((s) => (
                 <div key={s} className="flex items-center">
@@ -165,140 +155,150 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
                 </div>
               ))}
             </div>
+          )}
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
-                {error}
-              </div>
-            )}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+              {error}
+            </div>
+          )}
 
-            {/* Step 1: Select Date */}
-            {step === 1 && (
-              <div>
-                <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-primary" />
-                  Select a Date
-                </h3>
-                <div className="grid grid-cols-7 gap-2">
-                  {dates.map((date) => {
-                    const dayName = getDayName(date);
-                    const isAvailable = availableDays.includes(dayName);
-                    const isSelected = selectedDate?.toDateString() === date.toDateString();
-                    const isToday = date.toDateString() === new Date().toDateString();
+          {/* Step 1: Select Date */}
+          {step === 1 && (
+            <div>
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-primary" />
+                Select a Date
+              </h3>
+              <div className="grid grid-cols-7 gap-2">
+                {dates.map((date) => {
+                  const dayName = getDayName(date);
+                  const isAvailable = availableDays.includes(dayName);
+                  const isSelected = selectedDate?.toDateString() === date.toDateString();
 
-                    return (
-                      <button
-                        key={date.toISOString()}
-                        onClick={() => isAvailable && setSelectedDate(date)}
-                        disabled={!isAvailable}
-                        className={cn(
-                          'p-2 rounded-xl text-center transition-all',
-                          !isAvailable && 'opacity-30 cursor-not-allowed',
-                          isSelected ? 'bg-primary text-white' : 'hover:bg-gray-50',
-                          isToday && !isSelected && 'ring-2 ring-primary/20'
-                        )}
-                      >
-                        <p className="text-xs text-gray-500">
-                          {date.toLocaleDateString('en-US', { weekday: 'short' })}
-                        </p>
-                        <p className={cn('text-lg font-semibold', isSelected ? 'text-white' : 'text-gray-900')}>
-                          {date.getDate()}
-                        </p>
-                        <p className="text-xs text-gray-500">
-                          {date.toLocaleDateString('en-US', { month: 'short' })}
-                        </p>
-                      </button>
-                    );
-                  })}
-                </div>
-                <p className="text-sm text-gray-500 mt-4">
-                  Available on: {availableDays.join(', ')}
-                </p>
-              </div>
-            )}
-
-            {/* Step 2: Select Time */}
-            {step === 2 && selectedDate && (
-              <div>
-                <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
-                  <Clock className="w-5 h-5 text-primary" />
-                  Select a Time
-                </h3>
-                <p className="text-sm text-gray-500 mb-4">
-                  {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                </p>
-                <div className="grid grid-cols-4 gap-2">
-                  {getAvailableTimesForDate(selectedDate).map((time) => (
+                  return (
                     <button
-                      key={time}
-                      onClick={() => setSelectedTime(time)}
+                      key={date.toISOString()}
+                      onClick={() => isAvailable && setSelectedDate(date)}
+                      disabled={!isAvailable}
                       className={cn(
-                        'py-2 px-3 rounded-lg text-sm font-medium transition-all',
-                        selectedTime === time
-                          ? 'bg-primary text-white'
-                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                        'p-2 rounded-xl text-center transition-all',
+                        !isAvailable && 'opacity-30 cursor-not-allowed',
+                        isSelected ? 'bg-primary text-white' : 'hover:bg-gray-50'
                       )}
                     >
-                      {time}
+                      <p className="text-xs text-gray-500">
+                        {date.toLocaleDateString('en-US', { weekday: 'short' })}
+                      </p>
+                      <p className={cn('text-lg font-semibold', isSelected ? 'text-white' : 'text-gray-900')}>
+                        {date.getDate()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {date.toLocaleDateString('en-US', { month: 'short' })}
+                      </p>
                     </button>
-                  ))}
-                </div>
+                  );
+                })}
               </div>
-            )}
+              <p className="text-sm text-gray-500 mt-4">
+                Available on: {availableDays.join(', ')}
+              </p>
+            </div>
+          )}
 
-            {/* Step 3: Confirm Details */}
-            {step === 3 && (
-              <div className="space-y-4">
-                <h3 className="font-medium text-gray-900 mb-4">Confirm Booking Details</h3>
-
-                <div className="p-4 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Calendar className="w-5 h-5 text-primary" />
-                    <span className="font-medium">
-                      {selectedDate?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <Clock className="w-5 h-5 text-primary" />
-                    <span className="font-medium">{selectedTime}</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
-                  <select
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+          {/* Step 2: Select Time */}
+          {step === 2 && selectedDate && (
+            <div>
+              <h3 className="font-medium text-gray-900 mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-primary" />
+                Select a Time
+              </h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {selectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </p>
+              <div className="grid grid-cols-4 gap-2">
+                {getAvailableTimesForDate(selectedDate).map((time) => (
+                  <button
+                    key={time}
+                    onClick={() => setSelectedTime(time)}
+                    className={cn(
+                      'py-2 px-3 rounded-lg text-sm font-medium transition-all',
+                      selectedTime === time
+                        ? 'bg-primary text-white'
+                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
+                    )}
                   >
-                    <option value="">Select a subject</option>
-                    {tutor.subjects.map((s) => (
-                      <option key={s} value={s}>{s}</option>
-                    ))}
-                  </select>
-                </div>
+                    {time}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Notes (optional)</label>
-                  <textarea
-                    value={notes}
-                    onChange={(e) => setNotes(e.target.value)}
-                    rows={3}
-                    placeholder="What would you like to focus on?"
-                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
-                  />
-                </div>
+          {/* Step 3: Confirm Details */}
+          {step === 3 && (
+            <div className="space-y-4">
+              <h3 className="font-medium text-gray-900 mb-4">Confirm Booking Details</h3>
 
-                <div className="p-4 bg-primary/5 rounded-xl">
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-600">Session Price</span>
-                    <span className="text-xl font-bold text-gray-900">${tutor.hourlyRate}</span>
-                  </div>
+              <div className="p-4 bg-gray-50 rounded-xl">
+                <div className="flex items-center gap-3 mb-2">
+                  <Calendar className="w-5 h-5 text-primary" />
+                  <span className="font-medium">
+                    {selectedDate?.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Clock className="w-5 h-5 text-primary" />
+                  <span className="font-medium">{selectedTime}</span>
                 </div>
               </div>
-            )}
 
-            {/* Navigation Buttons */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Subject *</label>
+                <select
+                  value={subject}
+                  onChange={(e) => setSubject(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  <option value="">Select a subject</option>
+                  {tutor.subjects.map((s) => (
+                    <option key={s} value={s}>{s}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Notes (optional)</label>
+                <textarea
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  rows={3}
+                  placeholder="What would you like to focus on?"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                />
+              </div>
+
+              <div className="p-4 bg-primary/5 rounded-xl">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Session Price</span>
+                  <span className="text-xl font-bold text-gray-900">${tutor.hourlyRate}</span>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 4: Payment */}
+          {step === 4 && (
+            <PaymentForm
+              bookingId={bookingId}
+              amount={tutor.hourlyRate}
+              onSuccess={handlePaymentSuccess}
+              onCancel={() => setStep(3)}
+            />
+          )}
+
+          {/* Navigation Buttons */}
+          {step < 4 && (
             <div className="flex gap-3 mt-6">
               {step > 1 && (
                 <button
@@ -318,23 +318,26 @@ export default function BookingModal({ tutor, isOpen, onClose }: BookingModalPro
                 </button>
               ) : (
                 <button
-                  onClick={handleBooking}
+                  onClick={handleCreateBooking}
                   disabled={loading || !subject}
                   className="flex-1 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <>
                       <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                      Booking...
+                      Creating...
                     </>
                   ) : (
-                    'Confirm Booking'
+                    <>
+                      <CreditCard className="w-5 h-5" />
+                      Proceed to Payment
+                    </>
                   )}
                 </button>
               )}
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
