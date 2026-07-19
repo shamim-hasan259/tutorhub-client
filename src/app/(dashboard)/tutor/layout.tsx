@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
-  LayoutDashboard, User, BookOpen, Calendar, Star, LogOut, GraduationCap
+  LayoutDashboard, User, BookOpen, Calendar, Star, LogOut, ClipboardList
 } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 
 const sidebarLinks = [
   { href: '/tutor/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { href: '/tutor/bookings', label: 'Bookings', icon: ClipboardList },
   { href: '/tutor/profile', label: 'Manage Profile', icon: User },
   { href: '/tutor/subjects', label: 'Subjects', icon: BookOpen },
   { href: '/tutor/availability', label: 'Availability', icon: Calendar },
