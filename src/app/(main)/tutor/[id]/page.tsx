@@ -23,22 +23,31 @@ export default function TutorDetailsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchTutor = async () => {
-      try {
-        const response = await api.get(`/tutors/${tutorId}`);
-        setTutor(response.data.data);
-
-        const reviewsResponse = await api.get(`/reviews/tutor/${tutorId}`);
-        setReviews(reviewsResponse.data.data);
-      } catch (error) {
-        console.error('Failed to fetch tutor:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchTutor();
   }, [tutorId]);
+
+  const fetchTutor = async () => {
+    try {
+      const response = await api.get(`/tutors/${tutorId}`);
+      setTutor(response.data.data);
+
+      const reviewsResponse = await api.get(`/reviews/tutor/${tutorId}`);
+      setReviews(reviewsResponse.data.data);
+    } catch (error) {
+      console.error('Failed to fetch tutor:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const refreshReviews = async () => {
+    try {
+      const reviewsResponse = await api.get(`/reviews/tutor/${tutorId}`);
+      setReviews(reviewsResponse.data.data);
+    } catch (error) {
+      console.error('Failed to refresh reviews:', error);
+    }
+  };
 
   if (loading) {
     return (
@@ -228,7 +237,7 @@ export default function TutorDetailsPage() {
             )}
 
             {/* Reviews */}
-            <ReviewList reviews={reviews} tutorId={tutorId} />
+            <ReviewList reviews={reviews} tutorId={tutorId} onReviewAdded={refreshReviews} />
           </div>
 
           {/* Sidebar */}
