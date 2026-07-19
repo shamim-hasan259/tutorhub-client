@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Menu, X, GraduationCap, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/helpers';
+import GlobalSearch from '@/components/ui/GlobalSearch';
 
 const navLinks = [
   { href: '/', label: 'Home' },
@@ -53,6 +54,9 @@ export default function Navbar() {
               </Link>
             ))}
           </div>
+
+          {/* Search */}
+          <GlobalSearch />
 
           {/* Desktop Auth Buttons */}
           <div className="hidden md:flex items-center gap-4">
