@@ -12,6 +12,7 @@ import { formatCurrency } from '@/utils/helpers';
 import ReviewList from '@/components/tutor/ReviewList';
 import RelatedTutors from '@/components/tutor/RelatedTutors';
 import BookmarkButton from '@/components/ui/BookmarkButton';
+import BookingModal from '@/components/tutor/BookingModal';
 import type { Tutor, Review } from '@/types';
 
 export default function TutorDetailsPage() {
@@ -21,6 +22,7 @@ export default function TutorDetailsPage() {
   const [tutor, setTutor] = useState<Tutor | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
     fetchTutor();
@@ -252,7 +254,10 @@ export default function TutorDetailsPage() {
                   <p className="text-gray-500">per hour</p>
                 </div>
 
-                <button className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors mb-3">
+                <button
+                  onClick={() => setShowBookingModal(true)}
+                  className="w-full py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors mb-3"
+                >
                   Book a Session
                 </button>
                 <button className="w-full py-3 bg-gray-100 text-gray-700 font-semibold rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2">
@@ -280,6 +285,15 @@ export default function TutorDetailsPage() {
           </div>
         </div>
       </div>
+
+      {/* Booking Modal */}
+      {tutor && (
+        <BookingModal
+          tutor={tutor}
+          isOpen={showBookingModal}
+          onClose={() => setShowBookingModal(false)}
+        />
+      )}
     </div>
   );
 }
