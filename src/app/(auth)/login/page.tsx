@@ -7,6 +7,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Mail, Lock, Eye, EyeOff, GraduationCap } from 'lucide-react';
 import { loginSchema, type LoginInput } from '@/lib/validations';
+import { signIn } from '@/lib/auth';
 import { cn } from '@/utils/helpers';
 
 export default function LoginPage() {
@@ -27,9 +28,21 @@ export default function LoginPage() {
     setIsLoading(true);
     setError('');
     try {
-      // TODO: Integrate with Better Auth
-      console.log('Login:', data);
-      router.push('/');
+      const { data: result, error } = await signIn.email({
+        email: data.email,
+        password: data.password,
+      });
+
+      if (error) {
+        setError(error.message || 'Invalid email or password');
+        return;
+      }
+
+      if (result?.token) {
+        localStorage.setItem('session_token', result.token);
+        router.push('/');
+        router.refresh();
+      }
     } catch (err) {
       setError('Invalid email or password');
     } finally {

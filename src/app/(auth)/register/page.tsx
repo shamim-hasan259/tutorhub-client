@@ -33,9 +33,32 @@ export default function RegisterPage() {
     setIsLoading(true);
     setError('');
     try {
-      // TODO: Integrate with Better Auth
-      console.log('Register:', data);
-      router.push('/login');
+      const baseURL = process.env.NEXT_PUBLIC_BETTER_AUTH_BASE_URL || 'http://localhost:3000';
+      const response = await fetch(`${baseURL}/api/auth/sign-up/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          role: data.role,
+        }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok || result.error) {
+        setError(result.error?.message || result.message || 'Registration failed. Please try again.');
+        return;
+      }
+
+      if (result.token) {
+        localStorage.setItem('session_token', result.token);
+        router.push('/');
+        router.refresh();
+      } else {
+        router.push('/login');
+      }
     } catch (err) {
       setError('Registration failed. Please try again.');
     } finally {

@@ -6,6 +6,7 @@ import { usePathname } from 'next/navigation';
 import { Menu, X, GraduationCap, ChevronDown } from 'lucide-react';
 import { cn } from '@/utils/helpers';
 import GlobalSearch from '@/components/ui/GlobalSearch';
+import { useAuth } from '@/hooks/useAuth';
 
 const navLinks = [
   { href: '/', label: 'Home' },
@@ -20,10 +21,9 @@ const authLinks = [
 export default function Navbar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
+  const { isLoggedIn, user, signOut, isLoading } = useAuth();
 
-  // TODO: Replace with actual auth state
-  const isLoggedIn = false;
-  const userRole = null;
+  const userRole = user?.role || null;
 
   return (
     <nav className="sticky top-0 z-50 glass border-b border-gray-100">
@@ -69,13 +69,15 @@ export default function Navbar() {
                   Dashboard
                 </Link>
                 <button
-                  onClick={() => {/* TODO: sign out */}}
+                  onClick={() => signOut()}
                   className="text-sm font-medium text-gray-600 hover:text-primary transition-colors"
                 >
                   Logout
                 </button>
                 <div className="w-9 h-9 bg-secondary rounded-full flex items-center justify-center">
-                  <span className="text-sm font-medium text-white">U</span>
+                  <span className="text-sm font-medium text-white">
+                    {user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                  </span>
                 </div>
               </div>
             ) : (
@@ -141,7 +143,10 @@ export default function Navbar() {
                 Dashboard
               </Link>
               <button
-                onClick={() => {/* TODO: sign out */}}
+                onClick={() => {
+                  signOut();
+                  setIsOpen(false);
+                }}
                 className="block text-sm font-medium text-gray-600 hover:text-primary transition-colors"
               >
                 Logout
