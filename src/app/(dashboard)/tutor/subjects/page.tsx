@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { BookOpen, Plus, X, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { BookOpen, Plus, X, Save, Loader2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { cn } from '@/utils/helpers';
 
@@ -12,11 +12,28 @@ const availableSubjects = [
 ];
 
 export default function TutorSubjectsPage() {
-  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([
-    'Mathematics', 'Physics',
-  ]);
+  const [selectedSubjects, setSelectedSubjects] = useState<string[]>([]);
+  const [tutorId, setTutorId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchSubjects = async () => {
+      try {
+        const { data: response } = await api.get('/tutors/me');
+        const tutor = response.data;
+        setTutorId(tutor._id);
+        setSelectedSubjects(tutor.subjects || []);
+      } catch (err) {
+        setError('Failed to load subjects');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchSubjects();
+  }, []);
 
   const toggleSubject = (subject: string) => {
     if (selectedSubjects.includes(subject)) {
@@ -31,17 +48,35 @@ export default function TutorSubjectsPage() {
   };
 
   const handleSave = async () => {
+    if (!tutorId) return;
     setSaving(true);
+    setError('');
     try {
-      await api.put('/tutors/1', { subjects: selectedSubjects });
+      await api.put(`/tutors/${tutorId}`, { subjects: selectedSubjects });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-      console.error('Failed to update subjects:', error);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update subjects');
     } finally {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Manage Subjects</h1>
+          <p className="text-gray-600">Select the subjects you can teach</p>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-soft">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -49,6 +84,12 @@ export default function TutorSubjectsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Manage Subjects</h1>
         <p className="text-gray-600">Select the subjects you can teach</p>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+          {error}
+        </div>
+      )}
 
       {success && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm">
@@ -58,25 +99,22 @@ export default function TutorSubjectsPage() {
 
       {/* Selected Subjects */}
       <div className="bg-white rounded-2xl p-6 shadow-soft">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-          <BookOpen className="w-5 h-5 text-primary" />
-          Your Subjects ({selectedSubjects.length})
-        </h2>
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Selected Subjects</h2>
         {selectedSubjects.length === 0 ? (
-          <p className="text-gray-500 text-center py-8">No subjects selected yet</p>
+          <p className="text-sm text-gray-500">No subjects selected yet</p>
         ) : (
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap gap-2">
             {selectedSubjects.map((subject) => (
               <span
                 key={subject}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary font-medium rounded-full"
+                className="inline-flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary rounded-lg text-sm font-medium"
               >
                 {subject}
                 <button
                   onClick={() => removeSubject(subject)}
-                  className="p-0.5 hover:bg-primary/20 rounded-full transition-colors"
+                  className="hover:text-primary/70"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-3 h-3" />
                 </button>
               </span>
             ))}
@@ -88,24 +126,25 @@ export default function TutorSubjectsPage() {
       <div className="bg-white rounded-2xl p-6 shadow-soft">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Available Subjects</h2>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-          {availableSubjects.map((subject) => {
-            const isSelected = selectedSubjects.includes(subject);
-            return (
-              <button
-                key={subject}
-                onClick={() => toggleSubject(subject)}
-                className={cn(
-                  'px-4 py-3 rounded-xl text-sm font-medium transition-all',
-                  isSelected
-                    ? 'bg-primary text-white'
-                    : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                )}
-              >
-                {isSelected && <span className="mr-1">✓</span>}
+          {availableSubjects.map((subject) => (
+            <button
+              key={subject}
+              onClick={() => toggleSubject(subject)}
+              className={cn(
+                'p-3 rounded-xl border-2 text-sm font-medium transition-all text-left',
+                selectedSubjects.includes(subject)
+                  ? 'border-primary bg-primary/5 text-primary'
+                  : 'border-gray-200 hover:border-gray-300 text-gray-700'
+              )}
+            >
+              <div className="flex items-center justify-between">
                 {subject}
-              </button>
-            );
-          })}
+                {selectedSubjects.includes(subject) && (
+                  <BookOpen className="w-4 h-4" />
+                )}
+              </div>
+            </button>
+          ))}
         </div>
       </div>
 
@@ -113,11 +152,15 @@ export default function TutorSubjectsPage() {
       <div className="flex justify-end">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !tutorId}
           className="px-8 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
-          <Save className="w-5 h-5" />
-          {saving ? 'Saving...' : 'Save Subjects'}
+          {saving ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Save className="w-5 h-5" />
+          )}
+          {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
     </div>

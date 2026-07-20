@@ -1,99 +1,194 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
-  User, Mail, Phone, MapPin, Save, Plus, Trash2, GraduationCap, Briefcase
+  User, Mail, Phone, MapPin, Save, Plus, Trash2, GraduationCap, Briefcase, Loader2
 } from 'lucide-react';
 import api from '@/lib/axios';
 import { cn } from '@/utils/helpers';
 
+interface Education {
+  degree: string;
+  institution: string;
+  year: number;
+}
+
+interface Experience {
+  title: string;
+  institution: string;
+  startDate: string;
+  endDate?: string;
+  description: string;
+}
+
+interface TutorProfile {
+  _id: string;
+  userId: {
+    _id: string;
+    name: string;
+    email: string;
+    phone?: string;
+    address?: string;
+    avatar?: string | null;
+  };
+  title: string;
+  bio: string;
+  subjects: string[];
+  hourlyRate: number;
+  teachingMode: string;
+  location: string;
+  education: Education[];
+  experience: Experience[];
+}
+
 export default function TutorProfilePage() {
+  const [tutorId, setTutorId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
-    name: 'Tutor User',
-    email: 'tutor@email.com',
+    name: '',
+    email: '',
     phone: '',
     address: '',
-    title: 'Mathematics Tutor',
-    bio: 'Passionate educator with 5+ years of experience helping students excel in mathematics.',
-    hourlyRate: '45',
+    title: '',
+    bio: '',
+    hourlyRate: '',
     teachingMode: 'both',
-    location: 'New York',
-    education: [
-      { degree: 'MSc Mathematics', institution: 'MIT', year: 2020 },
-    ],
-    experience: [
-      { title: 'Math Tutor', institution: 'Khan Academy', startDate: '2020-01-01', description: 'Teaching algebra and calculus' },
-    ],
+    location: '',
   });
+  const [education, setEducation] = useState<Education[]>([]);
+  const [experience, setExperience] = useState<Experience[]>([]);
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const { data: profileRes } = await api.get('/profile');
+        const profile = profileRes.data;
+
+        setFormData({
+          name: profile.name || '',
+          email: profile.email || '',
+          phone: profile.phone || '',
+          address: profile.address || '',
+          title: '',
+          bio: '',
+          hourlyRate: '',
+          teachingMode: 'both',
+          location: '',
+        });
+
+        try {
+          const { data: tutorRes } = await api.get('/tutors/me');
+          const tutor: TutorProfile = tutorRes.data;
+          setTutorId(tutor._id);
+          setFormData((prev) => ({
+            ...prev,
+            title: tutor.title || '',
+            bio: tutor.bio || '',
+            hourlyRate: String(tutor.hourlyRate || ''),
+            teachingMode: tutor.teachingMode || 'both',
+            location: tutor.location || '',
+          }));
+          setEducation(tutor.education || []);
+          setExperience(tutor.experience || []);
+        } catch {
+          // Tutor profile doesn't exist yet - user needs to create one
+        }
+      } catch (err) {
+        setError('Failed to load profile data');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
+    setError('');
     try {
       await api.put('/profile', {
         name: formData.name,
         phone: formData.phone,
         address: formData.address,
       });
-      await api.put(`/tutors/1`, {
+
+      const tutorData = {
         title: formData.title,
         bio: formData.bio,
         hourlyRate: Number(formData.hourlyRate),
         teachingMode: formData.teachingMode,
         location: formData.location,
-        education: formData.education,
-        experience: formData.experience,
-      });
+        education,
+        experience,
+      };
+
+      if (tutorId) {
+        await api.put(`/tutors/${tutorId}`, tutorData);
+      } else {
+        const { data: newTutorRes } = await api.post('/tutors', {
+          ...tutorData,
+          subjects: [],
+        });
+        setTutorId(newTutorRes.data._id);
+      }
+
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-      console.error('Failed to update profile:', error);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update profile');
     } finally {
       setSaving(false);
     }
   };
 
   const addEducation = () => {
-    setFormData({
-      ...formData,
-      education: [...formData.education, { degree: '', institution: '', year: new Date().getFullYear() }],
-    });
+    setEducation([...education, { degree: '', institution: '', year: new Date().getFullYear() }]);
   };
 
   const removeEducation = (index: number) => {
-    setFormData({
-      ...formData,
-      education: formData.education.filter((_, i) => i !== index),
-    });
+    setEducation(education.filter((_, i) => i !== index));
   };
 
-  const updateEducation = (index: number, field: string, value: string | number) => {
-    const newEducation = [...formData.education];
+  const updateEducation = (index: number, field: keyof Education, value: string | number) => {
+    const newEducation = [...education];
     (newEducation[index] as any)[field] = value;
-    setFormData({ ...formData, education: newEducation });
+    setEducation(newEducation);
   };
 
   const addExperience = () => {
-    setFormData({
-      ...formData,
-      experience: [...formData.experience, { title: '', institution: '', startDate: '', description: '' }],
-    });
+    setExperience([...experience, { title: '', institution: '', startDate: '', description: '' }]);
   };
 
   const removeExperience = (index: number) => {
-    setFormData({
-      ...formData,
-      experience: formData.experience.filter((_, i) => i !== index),
-    });
+    setExperience(experience.filter((_, i) => i !== index));
   };
 
-  const updateExperience = (index: number, field: string, value: string) => {
-    const newExperience = [...formData.experience];
+  const updateExperience = (index: number, field: keyof Experience, value: string) => {
+    const newExperience = [...experience];
     (newExperience[index] as any)[field] = value;
-    setFormData({ ...formData, experience: newExperience });
+    setExperience(newExperience);
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Manage Profile</h1>
+          <p className="text-gray-600">Update your tutor profile and information</p>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-soft">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -101,6 +196,12 @@ export default function TutorProfilePage() {
         <h1 className="text-2xl font-bold text-gray-900">Manage Profile</h1>
         <p className="text-gray-600">Update your tutor profile and information</p>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+          {error}
+        </div>
+      )}
 
       {success && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm">
@@ -201,40 +302,44 @@ export default function TutorProfilePage() {
             </button>
           </div>
           <div className="space-y-4">
-            {formData.education.map((edu, index) => (
-              <div key={index} className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl">
-                <div className="flex-1 grid md:grid-cols-3 gap-4">
-                  <input
-                    type="text"
-                    value={edu.degree}
-                    onChange={(e) => updateEducation(index, 'degree', e.target.value)}
-                    placeholder="Degree"
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <input
-                    type="text"
-                    value={edu.institution}
-                    onChange={(e) => updateEducation(index, 'institution', e.target.value)}
-                    placeholder="Institution"
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <input
-                    type="number"
-                    value={edu.year}
-                    onChange={(e) => updateEducation(index, 'year', Number(e.target.value))}
-                    placeholder="Year"
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
+            {education.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No education added yet</p>
+            ) : (
+              education.map((edu, index) => (
+                <div key={index} className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl">
+                  <div className="flex-1 grid md:grid-cols-3 gap-4">
+                    <input
+                      type="text"
+                      value={edu.degree}
+                      onChange={(e) => updateEducation(index, 'degree', e.target.value)}
+                      placeholder="Degree"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <input
+                      type="text"
+                      value={edu.institution}
+                      onChange={(e) => updateEducation(index, 'institution', e.target.value)}
+                      placeholder="Institution"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <input
+                      type="number"
+                      value={edu.year}
+                      onChange={(e) => updateEducation(index, 'year', Number(e.target.value))}
+                      placeholder="Year"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeEducation(index)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeEducation(index)}
-                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -255,46 +360,50 @@ export default function TutorProfilePage() {
             </button>
           </div>
           <div className="space-y-4">
-            {formData.experience.map((exp, index) => (
-              <div key={index} className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl">
-                <div className="flex-1 grid md:grid-cols-2 gap-4">
-                  <input
-                    type="text"
-                    value={exp.title}
-                    onChange={(e) => updateExperience(index, 'title', e.target.value)}
-                    placeholder="Job Title"
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <input
-                    type="text"
-                    value={exp.institution}
-                    onChange={(e) => updateExperience(index, 'institution', e.target.value)}
-                    placeholder="Institution"
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <input
-                    type="date"
-                    value={exp.startDate}
-                    onChange={(e) => updateExperience(index, 'startDate', e.target.value)}
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                  <input
-                    type="text"
-                    value={exp.description}
-                    onChange={(e) => updateExperience(index, 'description', e.target.value)}
-                    placeholder="Description"
-                    className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
+            {experience.length === 0 ? (
+              <p className="text-sm text-gray-500 text-center py-4">No experience added yet</p>
+            ) : (
+              experience.map((exp, index) => (
+                <div key={index} className="flex gap-4 items-start p-4 bg-gray-50 rounded-xl">
+                  <div className="flex-1 grid md:grid-cols-2 gap-4">
+                    <input
+                      type="text"
+                      value={exp.title}
+                      onChange={(e) => updateExperience(index, 'title', e.target.value)}
+                      placeholder="Job Title"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <input
+                      type="text"
+                      value={exp.institution}
+                      onChange={(e) => updateExperience(index, 'institution', e.target.value)}
+                      placeholder="Institution"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <input
+                      type="date"
+                      value={exp.startDate}
+                      onChange={(e) => updateExperience(index, 'startDate', e.target.value)}
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                    <input
+                      type="text"
+                      value={exp.description}
+                      onChange={(e) => updateExperience(index, 'description', e.target.value)}
+                      placeholder="Description"
+                      className="px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeExperience(index)}
+                    className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => removeExperience(index)}
-                  className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                >
-                  <Trash2 className="w-5 h-5" />
-                </button>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
 
@@ -305,7 +414,11 @@ export default function TutorProfilePage() {
             disabled={saving}
             className="px-8 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            <Save className="w-5 h-5" />
+            {saving ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Save className="w-5 h-5" />
+            )}
             {saving ? 'Saving...' : 'Save Changes'}
           </button>
         </div>

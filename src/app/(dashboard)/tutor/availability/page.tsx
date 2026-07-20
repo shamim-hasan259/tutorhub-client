@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Calendar, Save } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Calendar, Save, Loader2 } from 'lucide-react';
 import api from '@/lib/axios';
 import { cn } from '@/utils/helpers';
 
@@ -20,6 +20,7 @@ interface AvailabilitySlot {
 }
 
 export default function TutorAvailabilityPage() {
+  const [tutorId, setTutorId] = useState<string | null>(null);
   const [availability, setAvailability] = useState<AvailabilitySlot[]>(
     days.map((day) => ({
       day,
@@ -28,8 +29,39 @@ export default function TutorAvailabilityPage() {
       enabled: day !== 'Sunday',
     }))
   );
+  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const fetchAvailability = async () => {
+      try {
+        const { data: response } = await api.get('/tutors/me');
+        const tutor = response.data;
+        setTutorId(tutor._id);
+
+        if (tutor.availability && tutor.availability.length > 0) {
+          setAvailability(
+            days.map((day) => {
+              const slot = tutor.availability.find((s: any) => s.day === day);
+              return {
+                day,
+                startTime: slot?.startTime || '09:00',
+                endTime: slot?.endTime || '17:00',
+                enabled: !!slot,
+              };
+            })
+          );
+        }
+      } catch (err) {
+        setError('Failed to load availability');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAvailability();
+  }, []);
 
   const toggleDay = (index: number) => {
     const newAvailability = [...availability];
@@ -44,20 +76,38 @@ export default function TutorAvailabilityPage() {
   };
 
   const handleSave = async () => {
+    if (!tutorId) return;
     setSaving(true);
+    setError('');
     try {
       const schedule = availability
         .filter((slot) => slot.enabled)
         .map(({ day, startTime, endTime }) => ({ day, startTime, endTime }));
-      await api.put('/tutors/1', { availability: schedule });
+      await api.put(`/tutors/${tutorId}`, { availability: schedule });
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
-    } catch (error) {
-      console.error('Failed to update availability:', error);
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Failed to update availability');
     } finally {
       setSaving(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Manage Availability</h1>
+          <p className="text-gray-600">Set your weekly teaching schedule</p>
+        </div>
+        <div className="bg-white rounded-2xl p-6 shadow-soft">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 text-primary animate-spin" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -65,6 +115,12 @@ export default function TutorAvailabilityPage() {
         <h1 className="text-2xl font-bold text-gray-900">Manage Availability</h1>
         <p className="text-gray-600">Set your weekly teaching schedule</p>
       </div>
+
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 rounded-xl text-red-600 text-sm">
+          {error}
+        </div>
+      )}
 
       {success && (
         <div className="p-4 bg-green-50 border border-green-200 rounded-xl text-green-600 text-sm">
@@ -83,69 +139,41 @@ export default function TutorAvailabilityPage() {
             <div
               key={slot.day}
               className={cn(
-                'flex flex-col md:flex-row md:items-center gap-4 p-4 rounded-xl transition-colors',
-                slot.enabled ? 'bg-gray-50' : 'bg-gray-100 opacity-60'
+                'flex items-center gap-4 p-4 rounded-xl border transition-all',
+                slot.enabled ? 'bg-gray-50 border-gray-200' : 'bg-gray-100 border-gray-200 opacity-60'
               )}
             >
-              {/* Day Toggle */}
-              <div className="flex items-center gap-3 md:w-40">
-                <button
-                  onClick={() => toggleDay(index)}
-                  className={cn(
-                    'w-12 h-6 rounded-full transition-colors relative',
-                    slot.enabled ? 'bg-primary' : 'bg-gray-300'
-                  )}
-                >
-                  <span
-                    className={cn(
-                      'absolute top-1 w-4 h-4 bg-white rounded-full transition-transform',
-                      slot.enabled ? 'left-7' : 'left-1'
-                    )}
-                  />
-                </button>
+              <label className="flex items-center gap-3 min-w-[140px]">
+                <input
+                  type="checkbox"
+                  checked={slot.enabled}
+                  onChange={() => toggleDay(index)}
+                  className="w-5 h-5 text-primary rounded border-gray-300 focus:ring-primary"
+                />
                 <span className="font-medium text-gray-900">{slot.day}</span>
-              </div>
+              </label>
 
-              {/* Time Selectors */}
               {slot.enabled && (
-                <div className="flex items-center gap-4 flex-1">
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-500">From:</label>
-                    <select
-                      value={slot.startTime}
-                      onChange={(e) => updateTime(index, 'startTime', e.target.value)}
-                      className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      {timeSlots.map((time) => (
-                        <option key={time} value={time}>{time}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <label className="text-sm text-gray-500">To:</label>
-                    <select
-                      value={slot.endTime}
-                      onChange={(e) => updateTime(index, 'endTime', e.target.value)}
-                      className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      {timeSlots.map((time) => (
-                        <option key={time} value={time}>{time}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <span className="text-sm text-gray-500">
-                    {(() => {
-                      const start = parseInt(slot.startTime);
-                      const end = parseInt(slot.endTime);
-                      return `${end - start} hours`;
-                    })()}
-                  </span>
-                </div>
-              )}
-
-              {!slot.enabled && (
-                <div className="flex-1">
-                  <span className="text-sm text-gray-400">Not available</span>
+                <div className="flex items-center gap-3 flex-1">
+                  <select
+                    value={slot.startTime}
+                    onChange={(e) => updateTime(index, 'startTime', e.target.value)}
+                    className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                  >
+                    {timeSlots.map((time) => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
+                  <span className="text-gray-500">to</span>
+                  <select
+                    value={slot.endTime}
+                    onChange={(e) => updateTime(index, 'endTime', e.target.value)}
+                    className="px-3 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/20 text-sm"
+                  >
+                    {timeSlots.map((time) => (
+                      <option key={time} value={time}>{time}</option>
+                    ))}
+                  </select>
                 </div>
               )}
             </div>
@@ -153,23 +181,25 @@ export default function TutorAvailabilityPage() {
         </div>
       </div>
 
-      {/* Summary */}
+      {/* Schedule Summary */}
       <div className="bg-white rounded-2xl p-6 shadow-soft">
-        <h3 className="font-semibold text-gray-900 mb-3">Schedule Summary</h3>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-gray-50 rounded-xl">
-            <p className="text-2xl font-bold text-gray-900">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Schedule Summary</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
+          <div className="p-3 bg-primary/5 rounded-xl">
+            <div className="text-2xl font-bold text-primary">
               {availability.filter((s) => s.enabled).length}
-            </p>
-            <p className="text-sm text-gray-500">Days Available</p>
+            </div>
+            <div className="text-sm text-gray-600">Days Available</div>
           </div>
-          <div className="text-center p-4 bg-gray-50 rounded-xl">
-            <p className="text-2xl font-bold text-gray-900">
+          <div className="p-3 bg-green-50 rounded-xl">
+            <div className="text-2xl font-bold text-green-600">
               {availability.filter((s) => s.enabled).reduce((acc, s) => {
-                return acc + (parseInt(s.endTime) - parseInt(s.startTime));
-              }, 0)}
-            </p>
-            <p className="text-sm text-gray-500">Hours/Week</p>
+                const start = parseInt(s.startTime.split(':')[0]);
+                const end = parseInt(s.endTime.split(':')[0]);
+                return acc + (end - start);
+              }, 0)}h
+            </div>
+            <div className="text-sm text-gray-600">Total Hours/Week</div>
           </div>
         </div>
       </div>
@@ -178,11 +208,15 @@ export default function TutorAvailabilityPage() {
       <div className="flex justify-end">
         <button
           onClick={handleSave}
-          disabled={saving}
+          disabled={saving || !tutorId}
           className="px-8 py-3 bg-primary text-white font-semibold rounded-xl hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center gap-2"
         >
-          <Save className="w-5 h-5" />
-          {saving ? 'Saving...' : 'Save Schedule'}
+          {saving ? (
+            <Loader2 className="w-5 h-5 animate-spin" />
+          ) : (
+            <Save className="w-5 h-5" />
+          )}
+          {saving ? 'Saving...' : 'Save Changes'}
         </button>
       </div>
     </div>
