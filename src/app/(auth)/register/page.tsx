@@ -52,8 +52,9 @@ export default function RegisterPage() {
         return;
       }
 
-      if (result.token) {
-        localStorage.setItem('session_token', result.token);
+      const token = result?.token || result?.session?.token;
+      if (token) {
+        localStorage.setItem('session_token', token);
         router.push('/');
         router.refresh();
       } else {

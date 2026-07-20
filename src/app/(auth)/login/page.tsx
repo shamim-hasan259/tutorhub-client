@@ -38,10 +38,13 @@ export default function LoginPage() {
         return;
       }
 
-      if (result?.token) {
-        localStorage.setItem('session_token', result.token);
+      const token = result?.token || (result as any)?.session?.token;
+      if (token) {
+        localStorage.setItem('session_token', token);
         router.push('/');
         router.refresh();
+      } else {
+        setError('Login succeeded but no session token received');
       }
     } catch (err) {
       setError('Invalid email or password');

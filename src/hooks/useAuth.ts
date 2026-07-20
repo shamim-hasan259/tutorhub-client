@@ -19,6 +19,10 @@ interface SessionData {
   };
 }
 
+const AUTH_BASE = typeof window !== 'undefined'
+  ? (process.env.NEXT_PUBLIC_BETTER_AUTH_BASE_URL || 'http://localhost:3000')
+  : '';
+
 export function useAuth() {
   const router = useRouter();
   const [session, setSession] = useState<SessionData | null>(null);
@@ -27,20 +31,16 @@ export function useAuth() {
   const fetchSession = useCallback(async () => {
     try {
       const token = localStorage.getItem('session_token');
-      if (!token) {
-        setSession(null);
-        setIsLoading(false);
-        return;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(
-        `${process.env.NEXT_PUBLIC_BETTER_AUTH_BASE_URL || 'http://localhost:3000'}/api/auth/get-session`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
+      // Try with Bearer token first (from localStorage), then fallback to cookies
+      const response = await fetch(`${AUTH_BASE}/api/auth/get-session`, {
+        headers,
+        credentials: 'include',
+      });
 
       if (!response.ok) {
         localStorage.removeItem('session_token');
@@ -50,6 +50,11 @@ export function useAuth() {
 
       const data = await response.json();
       setSession(data);
+
+      // If we got a session and the token wasn't in localStorage, save it
+      if (data?.session?.token && !token) {
+        localStorage.setItem('session_token', data.session.token);
+      }
     } catch {
       localStorage.removeItem('session_token');
       setSession(null);
@@ -65,17 +70,11 @@ export function useAuth() {
   const signOut = useCallback(async () => {
     try {
       const token = localStorage.getItem('session_token');
-      if (token) {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_BETTER_AUTH_BASE_URL || 'http://localhost:3000'}/api/auth/sign-out`,
-          {
-            method: 'POST',
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-      }
+      await fetch(`${AUTH_BASE}/api/auth/sign-out`, {
+        method: 'POST',
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        credentials: 'include',
+      });
     } catch {
       // sign out even if the request fails
     } finally {
