@@ -3,61 +3,35 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  Users, Star, BookOpen, DollarSign, TrendingUp, ArrowRight,
-  Calendar, Clock, Award, MessageSquare
+  Users, Star, BookOpen, DollarSign,
+  Calendar, MessageSquare, Loader2
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Area, AreaChart
+  PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import api from '@/lib/axios';
 
-const COLORS = ['#FFB5A8', '#FFC8B8', '#FFE0C8', '#9CA3AF'];
+const COLORS = ['#FFB5A8', '#FFC8B8', '#FFE0C8', '#9CA3AF', '#A5B4FC'];
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default function TutorDashboard() {
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalStudents: 24,
-    averageRating: 4.9,
-    totalReviews: 128,
-    totalEarnings: 3450,
-    totalBookings: 48,
-    completedSessions: 42,
-    pendingBookings: 3,
-    activeSubjects: 3,
+    totalStudents: 0,
+    averageRating: 0,
+    totalReviews: 0,
+    totalEarnings: 0,
+    totalBookings: 0,
+    completedSessions: 0,
+    pendingBookings: 0,
+    activeSubjects: 0,
   });
-
-  const [earningsByMonth] = useState([
-    { month: 'Sep', earnings: 450 },
-    { month: 'Oct', earnings: 680 },
-    { month: 'Nov', earnings: 520 },
-    { month: 'Dec', earnings: 890 },
-    { month: 'Jan', earnings: 1200 },
-    { month: 'Feb', earnings: 950 },
-  ]);
-
-  const [bookingsByMonth] = useState([
-    { month: 'Sep', bookings: 8 },
-    { month: 'Oct', bookings: 12 },
-    { month: 'Nov', bookings: 10 },
-    { month: 'Dec', bookings: 15 },
-    { month: 'Jan', bookings: 20 },
-    { month: 'Feb', bookings: 16 },
-  ]);
-
-  const [subjectsData] = useState([
-    { name: 'Mathematics', students: 15, color: '#FFB5A8' },
-    { name: 'Physics', students: 8, color: '#FFC8B8' },
-    { name: 'Chemistry', students: 5, color: '#FFE0C8' },
-  ]);
-
-  const [ratingDistribution] = useState([
-    { rating: '5★', count: 85 },
-    { rating: '4★', count: 30 },
-    { rating: '3★', count: 10 },
-    { rating: '2★', count: 2 },
-    { rating: '1★', count: 1 },
-  ]);
-
+  const [earningsByMonth, setEarningsByMonth] = useState<{ month: string; earnings: number }[]>([]);
+  const [bookingsByMonth, setBookingsByMonth] = useState<{ month: string; bookings: number }[]>([]);
+  const [subjectsData, setSubjectsData] = useState<{ name: string; students: number; color: string }[]>([]);
+  const [ratingDistribution, setRatingDistribution] = useState<{ rating: string; count: number }[]>([]);
   const [recentBookings, setRecentBookings] = useState<any[]>([]);
   const [recentReviews, setRecentReviews] = useState<any[]>([]);
 
@@ -67,17 +41,133 @@ export default function TutorDashboard() {
 
   const fetchDashboardData = async () => {
     try {
-      const [bookingsRes, reviewsRes] = await Promise.all([
+      const [tutorRes, bookingsRes, reviewsRes, paymentsRes] = await Promise.all([
+        api.get('/tutors/me'),
         api.get('/bookings/tutor'),
         api.get('/reviews/tutor/me'),
+        api.get('/payments/tutor').catch(() => ({ data: { data: [] } })),
       ]);
 
-      setRecentBookings(bookingsRes.data.data.slice(0, 3));
-      setRecentReviews(reviewsRes.data.data.slice(0, 3));
+      const tutor = tutorRes.data.data;
+      const bookings = bookingsRes.data.data || [];
+      const reviews = reviewsRes.data.data || [];
+      const payments = paymentsRes.data.data || [];
+
+      // Stats from tutor profile
+      const totalStudents = tutor.totalStudents || 0;
+      const activeSubjects = tutor.subjects?.length || 0;
+
+      // Stats from bookings
+      const totalBookings = bookings.length;
+      const completedSessions = bookings.filter((b: any) => b.status === 'completed').length;
+      const pendingBookings = bookings.filter((b: any) => b.status === 'pending').length;
+
+      // Stats from reviews
+      const totalReviews = reviews.length;
+      const averageRating = totalReviews > 0
+        ? reviews.reduce((sum: number, r: any) => sum + r.rating, 0) / totalReviews
+        : 0;
+
+      // Stats from payments
+      const completedPayments = payments.filter((p: any) => p.status === 'completed');
+      const totalEarnings = completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+
+      setStats({
+        totalStudents,
+        averageRating: Math.round(averageRating * 10) / 10,
+        totalReviews,
+        totalEarnings: Math.round(totalEarnings),
+        totalBookings,
+        completedSessions,
+        pendingBookings,
+        activeSubjects,
+      });
+
+      // Build earnings by month from payments
+      const earningsMap = new Map<string, number>();
+      completedPayments.forEach((p: any) => {
+        const date = new Date(p.createdAt);
+        const key = `${date.getFullYear()}-${date.getMonth()}`;
+        const label = MONTH_NAMES[date.getMonth()];
+        earningsMap.set(key, (earningsMap.get(key) || 0) + (p.amount || 0));
+      });
+      const earningsData = Array.from(earningsMap.entries())
+        .map(([key, earnings]) => {
+          const [year, monthIdx] = key.split('-').map(Number);
+          return { month: MONTH_NAMES[monthIdx], earnings: Math.round(earnings), sortKey: year * 100 + monthIdx };
+        })
+        .sort((a, b) => a.sortKey - b.sortKey)
+        .slice(-6);
+      setEarningsByMonth(earningsData.length > 0 ? earningsData : [{ month: 'No data', earnings: 0 }]);
+
+      // Build bookings by month
+      const bookingsMap = new Map<string, number>();
+      bookings.forEach((b: any) => {
+        const date = new Date(b.date);
+        const key = `${date.getFullYear()}-${date.getMonth()}`;
+        const label = MONTH_NAMES[date.getMonth()];
+        bookingsMap.set(key, (bookingsMap.get(key) || 0) + 1);
+      });
+      const bookingsData = Array.from(bookingsMap.entries())
+        .map(([key, count]) => {
+          const [year, monthIdx] = key.split('-').map(Number);
+          return { month: MONTH_NAMES[monthIdx], bookings: count, sortKey: year * 100 + monthIdx };
+        })
+        .sort((a, b) => a.sortKey - b.sortKey)
+        .slice(-6);
+      setBookingsByMonth(bookingsData.length > 0 ? bookingsData : [{ month: 'No data', bookings: 0 }]);
+
+      // Build subjects data from bookings
+      const subjectMap = new Map<string, number>();
+      bookings.forEach((b: any) => {
+        if (b.subject) {
+          subjectMap.set(b.subject, (subjectMap.get(b.subject) || 0) + 1);
+        }
+      });
+      const subjectsArr = Array.from(subjectMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count], i) => ({ name, students: count, color: COLORS[i % COLORS.length] }));
+      setSubjectsData(subjectsArr);
+
+      // Build rating distribution
+      const ratingMap = new Map<number, number>();
+      for (let i = 1; i <= 5; i++) ratingMap.set(i, 0);
+      reviews.forEach((r: any) => {
+        const bucket = Math.round(r.rating);
+        if (bucket >= 1 && bucket <= 5) {
+          ratingMap.set(bucket, (ratingMap.get(bucket) || 0) + 1);
+        }
+      });
+      setRatingDistribution(
+        Array.from(ratingMap.entries())
+          .sort((a, b) => b[0] - a[0])
+          .map(([rating, count]) => ({ rating: `${rating}★`, count }))
+      );
+
+      // Recent items
+      setRecentBookings(bookings.slice(0, 5));
+      setRecentReviews(reviews.slice(0, 5));
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back, Tutor!</h1>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -106,7 +196,7 @@ export default function TutorDashboard() {
               <Star className="w-5 h-5 text-amber-500" />
             </div>
             <div>
-              <p className="text-2xl font-bold text-gray-900">{stats.averageRating}</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.averageRating || '—'}</p>
               <p className="text-xs text-gray-500">Avg Rating</p>
             </div>
           </div>
@@ -170,62 +260,76 @@ export default function TutorDashboard() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Students by Subject */}
         <div className="bg-white rounded-2xl p-6 shadow-soft">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Students by Subject</h3>
-          <div className="flex items-center gap-6">
-            <ResponsiveContainer width="50%" height={200}>
-              <PieChart>
-                <Pie
-                  data={subjectsData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="students"
-                >
-                  {subjectsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex-1 space-y-3">
-              {subjectsData.map((subject) => (
-                <div key={subject.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: subject.color }} />
-                  <span className="text-sm text-gray-600 flex-1">{subject.name}</span>
-                  <span className="text-sm font-medium">{subject.students}</span>
-                </div>
-              ))}
+          <h3 className="text-lg font-semibold text-gray-900 mb-4">Bookings by Subject</h3>
+          {subjectsData.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
+              No booking data yet
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width="50%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={subjectsData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="students"
+                  >
+                    {subjectsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-3">
+                {subjectsData.map((subject) => (
+                  <div key={subject.name} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: subject.color }} />
+                    <span className="text-sm text-gray-600 flex-1">{subject.name}</span>
+                    <span className="text-sm font-medium">{subject.students}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Rating Distribution */}
         <div className="bg-white rounded-2xl p-6 shadow-soft">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Rating Distribution</h3>
-          <div className="space-y-3">
-            {ratingDistribution.map(({ rating, count }) => (
-              <div key={rating} className="flex items-center gap-3">
-                <span className="text-sm text-gray-600 w-8">{rating}</span>
-                <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-amber-400 rounded-full"
-                    style={{ width: `${(count / stats.totalReviews) * 100}%` }}
-                  />
-                </div>
-                <span className="text-sm text-gray-500 w-10 text-right">{count}</span>
-              </div>
-            ))}
-          </div>
-          <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
-            <span className="text-sm text-gray-500">{stats.totalReviews} total reviews</span>
-            <div className="flex items-center gap-1">
-              <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-              <span className="font-semibold">{stats.averageRating}</span>
+          {stats.totalReviews === 0 ? (
+            <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
+              No reviews yet
             </div>
-          </div>
+          ) : (
+            <>
+              <div className="space-y-3">
+                {ratingDistribution.map(({ rating, count }) => (
+                  <div key={rating} className="flex items-center gap-3">
+                    <span className="text-sm text-gray-600 w-8">{rating}</span>
+                    <div className="flex-1 h-4 bg-gray-100 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-amber-400 rounded-full"
+                        style={{ width: `${(count / stats.totalReviews) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm text-gray-500 w-10 text-right">{count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <span className="text-sm text-gray-500">{stats.totalReviews} total reviews</span>
+                <div className="flex items-center gap-1">
+                  <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                  <span className="font-semibold">{stats.averageRating}</span>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       </div>
 
@@ -289,6 +393,7 @@ export default function TutorDashboard() {
                     <span className={`text-xs px-2 py-0.5 rounded-full ${
                       booking.status === 'pending' ? 'bg-amber-100 text-amber-700' :
                       booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                      booking.status === 'completed' ? 'bg-blue-100 text-blue-700' :
                       'bg-gray-100 text-gray-700'
                     }`}>
                       {booking.status}
@@ -337,29 +442,6 @@ export default function TutorDashboard() {
               ))}
             </div>
           )}
-        </div>
-      </div>
-
-      {/* Performance Summary */}
-      <div className="bg-white rounded-2xl p-6 shadow-soft">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Performance Summary</h2>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="text-center p-4 bg-gray-50 rounded-xl">
-            <p className="text-2xl font-bold text-gray-900">95%</p>
-            <p className="text-sm text-gray-500">Response Rate</p>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-xl">
-            <p className="text-2xl font-bold text-gray-900">89%</p>
-            <p className="text-sm text-gray-500">Booking Rate</p>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-xl">
-            <p className="text-2xl font-bold text-gray-900">4.9</p>
-            <p className="text-sm text-gray-500">Student Rating</p>
-          </div>
-          <div className="text-center p-4 bg-gray-50 rounded-xl">
-            <p className="text-2xl font-bold text-gray-900">87%</p>
-            <p className="text-sm text-gray-500">Repeat Students</p>
-          </div>
         </div>
       </div>
     </div>
