@@ -4,70 +4,154 @@ import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
   Heart, Brain, BookOpen, ArrowRight, Star, Calendar,
-  TrendingUp, Clock, DollarSign, Award
+  TrendingUp, Clock, DollarSign, Award, Loader2
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, Area, AreaChart
+  PieChart, Pie, Cell, AreaChart, Area
 } from 'recharts';
 import api from '@/lib/axios';
 
-const COLORS = ['#FFB5A8', '#FFC8B8', '#FFE0C8', '#9CA3AF'];
+const COLORS = ['#FFB5A8', '#FFC8B8', '#FFE0C8', '#9CA3AF', '#A5B4FC'];
+
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export default function StudentDashboard() {
+  const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
-    totalBookings: 12,
-    completedSessions: 8,
-    upcomingSessions: 3,
-    totalSpent: 360,
-    savedTutors: 5,
-    aiRecommendations: 3,
-    studyPlans: 2,
-    reviewsWritten: 6,
+    totalBookings: 0,
+    completedSessions: 0,
+    upcomingSessions: 0,
+    totalSpent: 0,
+    savedTutors: 0,
+    aiRecommendations: 0,
+    studyPlans: 0,
+    reviewsWritten: 0,
   });
-
-  const [bookingsByMonth] = useState([
-    { month: 'Sep', bookings: 2 },
-    { month: 'Oct', bookings: 4 },
-    { month: 'Nov', bookings: 3 },
-    { month: 'Dec', bookings: 5 },
-    { month: 'Jan', bookings: 8 },
-    { month: 'Feb', bookings: 6 },
-  ]);
-
-  const [subjectsData] = useState([
-    { name: 'Mathematics', sessions: 12, color: '#FFB5A8' },
-    { name: 'Physics', sessions: 8, color: '#FFC8B8' },
-    { name: 'English', sessions: 5, color: '#FFE0C8' },
-    { name: 'Chemistry', sessions: 3, color: '#9CA3AF' },
-  ]);
-
-  const [spendingByMonth] = useState([
-    { month: 'Sep', amount: 90 },
-    { month: 'Oct', amount: 180 },
-    { month: 'Nov', amount: 135 },
-    { month: 'Dec', amount: 225 },
-    { month: 'Jan', amount: 360 },
-    { month: 'Feb', amount: 270 },
-  ]);
-
+  const [bookingsByMonth, setBookingsByMonth] = useState<{ month: string; bookings: number }[]>([]);
+  const [subjectsData, setSubjectsData] = useState<{ name: string; sessions: number; color: string }[]>([]);
+  const [spendingByMonth, setSpendingByMonth] = useState<{ month: string; amount: number }[]>([]);
   const [upcomingBookings, setUpcomingBookings] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchUpcomingBookings();
+    fetchDashboardData();
   }, []);
 
-  const fetchUpcomingBookings = async () => {
+  const fetchDashboardData = async () => {
     try {
-      const response = await api.get('/bookings/student');
-      const bookings = response.data.data
+      const [bookingsRes, paymentsRes, bookmarksRes, reviewsRes, aiRes] = await Promise.all([
+        api.get('/bookings/student'),
+        api.get('/payments/student').catch(() => ({ data: { data: [] } })),
+        api.get('/bookmarks').catch(() => ({ data: { data: [] } })),
+        api.get('/reviews/student').catch(() => ({ data: { data: [] } })),
+        api.get('/ai/history').catch(() => ({ data: { data: [] } })),
+      ]);
+
+      const bookings = bookingsRes.data.data || [];
+      const payments = paymentsRes.data.data || [];
+      const bookmarks = bookmarksRes.data.data || [];
+      const reviews = reviewsRes.data.data || [];
+      const aiHistory = aiRes.data.data || [];
+
+      // Stats from bookings
+      const totalBookings = bookings.length;
+      const completedSessions = bookings.filter((b: any) => b.status === 'completed').length;
+      const upcomingSessions = bookings.filter((b: any) =>
+        b.status === 'confirmed' || b.status === 'pending'
+      ).length;
+
+      // Stats from payments
+      const completedPayments = payments.filter((p: any) => p.status === 'completed');
+      const totalSpent = Math.round(completedPayments.reduce((sum: number, p: any) => sum + (p.amount || 0), 0));
+
+      // Stats from other APIs
+      const savedTutors = bookmarks.length;
+      const reviewsWritten = reviews.length;
+      const aiRecommendations = aiHistory.filter((h: any) => h.type === 'tutor_recommendation').length;
+      const studyPlans = aiHistory.filter((h: any) => h.type === 'study_plan').length;
+
+      setStats({
+        totalBookings,
+        completedSessions,
+        upcomingSessions,
+        totalSpent,
+        savedTutors,
+        aiRecommendations,
+        studyPlans,
+        reviewsWritten,
+      });
+
+      // Build bookings by month
+      const bookingsMap = new Map<string, number>();
+      bookings.forEach((b: any) => {
+        const date = new Date(b.createdAt || b.date);
+        const key = `${date.getFullYear()}-${date.getMonth()}`;
+        bookingsMap.set(key, (bookingsMap.get(key) || 0) + 1);
+      });
+      const bookingsData = Array.from(bookingsMap.entries())
+        .map(([key, count]) => {
+          const [year, monthIdx] = key.split('-').map(Number);
+          return { month: MONTH_NAMES[monthIdx], bookings: count, sortKey: year * 100 + monthIdx };
+        })
+        .sort((a, b) => a.sortKey - b.sortKey)
+        .slice(-6);
+      setBookingsByMonth(bookingsData.length > 0 ? bookingsData : [{ month: 'No data', bookings: 0 }]);
+
+      // Build subjects data from bookings
+      const subjectMap = new Map<string, number>();
+      bookings.forEach((b: any) => {
+        if (b.subject) {
+          subjectMap.set(b.subject, (subjectMap.get(b.subject) || 0) + 1);
+        }
+      });
+      const subjectsArr = Array.from(subjectMap.entries())
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, count], i) => ({ name, sessions: count, color: COLORS[i % COLORS.length] }));
+      setSubjectsData(subjectsArr);
+
+      // Build spending by month
+      const spendingMap = new Map<string, number>();
+      completedPayments.forEach((p: any) => {
+        const date = new Date(p.createdAt);
+        const key = `${date.getFullYear()}-${date.getMonth()}`;
+        spendingMap.set(key, (spendingMap.get(key) || 0) + (p.amount || 0));
+      });
+      const spendingData = Array.from(spendingMap.entries())
+        .map(([key, amount]) => {
+          const [year, monthIdx] = key.split('-').map(Number);
+          return { month: MONTH_NAMES[monthIdx], amount: Math.round(amount), sortKey: year * 100 + monthIdx };
+        })
+        .sort((a, b) => a.sortKey - b.sortKey)
+        .slice(-6);
+      setSpendingByMonth(spendingData.length > 0 ? spendingData : [{ month: 'No data', amount: 0 }]);
+
+      // Upcoming bookings
+      const upcoming = bookings
         .filter((b: any) => b.status === 'confirmed' || b.status === 'pending')
-        .slice(0, 3);
-      setUpcomingBookings(bookings);
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(0, 5);
+      setUpcomingBookings(upcoming);
     } catch (error) {
-      console.error('Failed to fetch bookings:', error);
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Welcome back!</h1>
+          <p className="text-gray-600">Loading your dashboard...</p>
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -144,35 +228,41 @@ export default function StudentDashboard() {
         {/* Subjects Distribution */}
         <div className="bg-white rounded-2xl p-6 shadow-soft">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Sessions by Subject</h3>
-          <div className="flex items-center gap-6">
-            <ResponsiveContainer width="50%" height={200}>
-              <PieChart>
-                <Pie
-                  data={subjectsData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="sessions"
-                >
-                  {subjectsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex-1 space-y-3">
-              {subjectsData.map((subject) => (
-                <div key={subject.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: subject.color }} />
-                  <span className="text-sm text-gray-600 flex-1">{subject.name}</span>
-                  <span className="text-sm font-medium">{subject.sessions}</span>
-                </div>
-              ))}
+          {subjectsData.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
+              No booking data yet
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width="50%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={subjectsData}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="sessions"
+                  >
+                    {subjectsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-3">
+                {subjectsData.map((subject) => (
+                  <div key={subject.name} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: subject.color }} />
+                    <span className="text-sm text-gray-600 flex-1">{subject.name}</span>
+                    <span className="text-sm font-medium">{subject.sessions}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -254,7 +344,7 @@ export default function StudentDashboard() {
           )}
         </div>
 
-        {/* Recent Activity */}
+        {/* Learning Progress */}
         <div className="bg-white rounded-2xl p-6 shadow-soft">
           <h2 className="text-lg font-semibold text-gray-900 mb-4">Learning Progress</h2>
           <div className="space-y-4">
@@ -263,36 +353,53 @@ export default function StudentDashboard() {
                 <TrendingUp className="w-5 h-5 text-primary" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">8 sessions completed</p>
+                <p className="text-sm font-medium text-gray-900">{stats.completedSessions} sessions completed</p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div className="bg-primary h-2 rounded-full" style={{ width: '66%' }} />
+                  <div
+                    className="bg-primary h-2 rounded-full"
+                    style={{ width: `${stats.totalBookings > 0 ? (stats.completedSessions / stats.totalBookings) * 100 : 0}%` }}
+                  />
                 </div>
               </div>
-              <span className="text-sm font-medium text-gray-600">66%</span>
+              <span className="text-sm font-medium text-gray-600">
+                {stats.totalBookings > 0 ? Math.round((stats.completedSessions / stats.totalBookings) * 100) : 0}%
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
                 <Star className="w-5 h-5 text-green-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">6 reviews written</p>
+                <p className="text-sm font-medium text-gray-900">{stats.reviewsWritten} reviews written</p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div className="bg-green-500 h-2 rounded-full" style={{ width: '50%' }} />
+                  <div
+                    className="bg-green-500 h-2 rounded-full"
+                    style={{ width: `${stats.completedSessions > 0 ? Math.min((stats.reviewsWritten / stats.completedSessions) * 100, 100) : 0}%` }}
+                  />
                 </div>
               </div>
-              <span className="text-sm font-medium text-gray-600">50%</span>
+              <span className="text-sm font-medium text-gray-600">
+                {stats.completedSessions > 0 ? Math.min(Math.round((stats.reviewsWritten / stats.completedSessions) * 100), 100) : 0}%
+              </span>
             </div>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
                 <BookOpen className="w-5 h-5 text-amber-600" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-medium text-gray-900">2 study plans created</p>
+                <p className="text-sm font-medium text-gray-900">{stats.studyPlans} study plans created</p>
                 <div className="w-full bg-gray-200 rounded-full h-2 mt-1">
-                  <div className="bg-amber-500 h-2 rounded-full" style={{ width: '25%' }} />
+                  <div
+                    className="bg-amber-500 h-2 rounded-full"
+                    style={{ width: `${stats.aiRecommendations + stats.studyPlans > 0 ? (stats.studyPlans / (stats.aiRecommendations + stats.studyPlans)) * 100 : 0}%` }}
+                  />
                 </div>
               </div>
-              <span className="text-sm font-medium text-gray-600">25%</span>
+              <span className="text-sm font-medium text-gray-600">
+                {stats.aiRecommendations + stats.studyPlans > 0
+                  ? Math.round((stats.studyPlans / (stats.aiRecommendations + stats.studyPlans)) * 100)
+                  : 0}%
+              </span>
             </div>
           </div>
         </div>
