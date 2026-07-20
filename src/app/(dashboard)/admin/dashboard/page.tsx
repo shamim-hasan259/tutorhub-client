@@ -3,68 +3,77 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import {
-  Users, GraduationCap, Calendar, DollarSign, TrendingUp,
-  ArrowRight, Star, AlertCircle, CheckCircle
+  Users, GraduationCap, Calendar, DollarSign,
+  Star, AlertCircle, CheckCircle, Loader2
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  AreaChart, Area, PieChart, Pie, Cell, LineChart, Line
+  AreaChart, Area, PieChart, Pie, Cell
 } from 'recharts';
+import api from '@/lib/axios';
+import { formatRelativeTime } from '@/utils/helpers';
 
 const COLORS = ['#FFB5A8', '#FFC8B8', '#FFE0C8', '#9CA3AF', '#A78BFA'];
 
 export default function AdminDashboard() {
-  const [stats] = useState({
-    totalUsers: 1250,
-    totalTutors: 156,
-    totalStudents: 1094,
-    totalBookings: 3420,
-    totalRevenue: 85500,
-    activeBookings: 48,
-    pendingApprovals: 12,
-    monthlyGrowth: 18,
+  const [loading, setLoading] = useState(true);
+  const [stats, setStats] = useState({
+    totalUsers: 0,
+    totalTutors: 0,
+    totalStudents: 0,
+    totalBookings: 0,
+    totalRevenue: 0,
+    activeBookings: 0,
+    pendingApprovals: 0,
   });
+  const [bookingsByStatus, setBookingsByStatus] = useState<{ name: string; value: number; color: string }[]>([]);
+  const [topSubjects, setTopSubjects] = useState<{ subject: string; bookings: number }[]>([]);
+  const [recentBookings, setRecentBookings] = useState<any[]>([]);
+  const [recentReviews, setRecentReviews] = useState<any[]>([]);
 
-  const [revenueByMonth] = useState([
-    { month: 'Sep', revenue: 8500 },
-    { month: 'Oct', revenue: 12000 },
-    { month: 'Nov', revenue: 10500 },
-    { month: 'Dec', revenue: 15000 },
-    { month: 'Jan', revenue: 18500 },
-    { month: 'Feb', revenue: 21000 },
-  ]);
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
 
-  const [usersByMonth] = useState([
-    { month: 'Sep', users: 85 },
-    { month: 'Oct', users: 120 },
-    { month: 'Nov', users: 95 },
-    { month: 'Dec', users: 150 },
-    { month: 'Jan', users: 180 },
-    { month: 'Feb', users: 210 },
-  ]);
+  const fetchDashboardData = async () => {
+    try {
+      const { data: response } = await api.get('/admin/stats');
+      const data = response.data;
 
-  const [bookingsByStatus] = useState([
-    { name: 'Completed', value: 2800, color: '#22C55E' },
-    { name: 'Confirmed', value: 450, color: '#FFB5A8' },
-    { name: 'Pending', value: 120, color: '#FBBF24' },
-    { name: 'Cancelled', value: 50, color: '#EF4444' },
-  ]);
+      setStats({
+        totalUsers: data.totalUsers || 0,
+        totalTutors: data.totalTutors || 0,
+        totalStudents: data.totalStudents || 0,
+        totalBookings: data.totalBookings || 0,
+        totalRevenue: data.totalRevenue || 0,
+        activeBookings: data.activeBookings || 0,
+        pendingApprovals: data.pendingApprovals || 0,
+      });
 
-  const [topSubjects] = useState([
-    { subject: 'Mathematics', bookings: 850 },
-    { subject: 'Physics', bookings: 620 },
-    { subject: 'English', bookings: 540 },
-    { subject: 'Chemistry', bookings: 420 },
-    { subject: 'Computer Science', bookings: 380 },
-  ]);
+      setBookingsByStatus(data.bookingsByStatus || []);
+      setTopSubjects(data.topSubjects || []);
+      setRecentBookings(data.recentBookings || []);
+      setRecentReviews(data.recentReviews || []);
+    } catch (error) {
+      console.error('Failed to fetch dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const [recentActivity] = useState([
-    { id: 1, type: 'booking', message: 'New booking created by John Doe', time: '5 min ago', status: 'pending' },
-    { id: 2, type: 'review', message: 'New 5-star review for Dr. Sarah Mitchell', time: '15 min ago', status: 'success' },
-    { id: 3, type: 'tutor', message: 'New tutor registration: James Chen', time: '1 hour ago', status: 'info' },
-    { id: 4, type: 'payment', message: 'Payment received: $45 from Emily Watson', time: '2 hours ago', status: 'success' },
-    { id: 5, type: 'booking', message: 'Booking cancelled by Michael Park', time: '3 hours ago', status: 'warning' },
-  ]);
+  if (loading) {
+    return (
+      <div className="space-y-8">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-600">Loading dashboard...</p>
+        </div>
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="w-8 h-8 text-primary animate-spin" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -123,7 +132,7 @@ export default function AdminDashboard() {
       </div>
 
       {/* Quick Stats Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
         <div className="bg-white rounded-xl p-4 shadow-soft">
           <p className="text-2xl font-bold text-green-600">{stats.activeBookings}</p>
           <p className="text-xs text-gray-500">Active Bookings</p>
@@ -136,109 +145,88 @@ export default function AdminDashboard() {
           <p className="text-2xl font-bold text-blue-600">{stats.totalStudents.toLocaleString()}</p>
           <p className="text-xs text-gray-500">Total Students</p>
         </div>
-        <div className="bg-white rounded-xl p-4 shadow-soft">
-          <p className="text-2xl font-bold text-primary">+{stats.monthlyGrowth}%</p>
-          <p className="text-xs text-gray-500">Monthly Growth</p>
-        </div>
       </div>
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Revenue Chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-soft">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Revenue Overview</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={revenueByMonth}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
-              <Area type="monotone" dataKey="revenue" stroke="#A78BFA" fill="#A78BFA" fillOpacity={0.3} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Users Chart */}
-        <div className="bg-white rounded-2xl p-6 shadow-soft">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">New Users</h3>
-          <ResponsiveContainer width="100%" height={250}>
-            <BarChart data={usersByMonth}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-              <XAxis dataKey="month" tick={{ fontSize: 12 }} />
-              <YAxis tick={{ fontSize: 12 }} />
-              <Tooltip />
-              <Bar dataKey="users" fill="#FFB5A8" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Second Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Bookings by Status */}
         <div className="bg-white rounded-2xl p-6 shadow-soft">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Bookings by Status</h3>
-          <div className="flex items-center gap-6">
-            <ResponsiveContainer width="50%" height={200}>
-              <PieChart>
-                <Pie
-                  data={bookingsByStatus}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={50}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {bookingsByStatus.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex-1 space-y-3">
-              {bookingsByStatus.map((status) => (
-                <div key={status.name} className="flex items-center gap-2">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: status.color }} />
-                  <span className="text-sm text-gray-600 flex-1">{status.name}</span>
-                  <span className="text-sm font-medium">{status.value.toLocaleString()}</span>
-                </div>
-              ))}
+          {bookingsByStatus.every((s) => s.value === 0) ? (
+            <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
+              No booking data yet
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center gap-6">
+              <ResponsiveContainer width="50%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={bookingsByStatus.filter((s) => s.value > 0)}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={50}
+                    outerRadius={80}
+                    paddingAngle={5}
+                    dataKey="value"
+                  >
+                    {bookingsByStatus
+                      .filter((s) => s.value > 0)
+                      .map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="flex-1 space-y-3">
+                {bookingsByStatus.map((status) => (
+                  <div key={status.name} className="flex items-center gap-2">
+                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: status.color }} />
+                    <span className="text-sm text-gray-600 flex-1">{status.name}</span>
+                    <span className="text-sm font-medium">{status.value.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Top Subjects */}
         <div className="bg-white rounded-2xl p-6 shadow-soft">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">Top Subjects</h3>
-          <div className="space-y-3">
-            {topSubjects.map((subject, index) => (
-              <div key={subject.subject} className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-500 w-6">{index + 1}</span>
-                <div className="flex-1">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium text-gray-900">{subject.subject}</span>
-                    <span className="text-sm text-gray-500">{subject.bookings}</span>
-                  </div>
-                  <div className="w-full bg-gray-100 rounded-full h-2">
-                    <div
-                      className="h-2 rounded-full"
-                      style={{
-                        width: `${(subject.bookings / topSubjects[0].bookings) * 100}%`,
-                        backgroundColor: COLORS[index % COLORS.length]
-                      }}
-                    />
+          {topSubjects.length === 0 ? (
+            <div className="flex items-center justify-center py-8 text-gray-500 text-sm">
+              No subject data yet
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {topSubjects.map((subject, index) => (
+                <div key={subject.subject} className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-500 w-6">{index + 1}</span>
+                  <div className="flex-1">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-sm font-medium text-gray-900">{subject.subject}</span>
+                      <span className="text-sm text-gray-500">{subject.bookings}</span>
+                    </div>
+                    <div className="w-full bg-gray-100 rounded-full h-2">
+                      <div
+                        className="h-2 rounded-full"
+                        style={{
+                          width: `${(subject.bookings / topSubjects[0].bookings) * 100}%`,
+                          backgroundColor: COLORS[index % COLORS.length]
+                        }}
+                      />
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <Link
           href="/admin/users"
           className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-2xl p-5 text-white hover:shadow-lg transition-shadow"
@@ -253,38 +241,86 @@ export default function AdminDashboard() {
           <h3 className="font-semibold mb-1">Manage Tutors</h3>
           <p className="text-white/80 text-sm">Approve and manage tutors</p>
         </Link>
-        <Link
-          href="/admin/analytics"
-          className="bg-gradient-to-br from-purple-500 to-purple-600 rounded-2xl p-5 text-white hover:shadow-lg transition-shadow"
-        >
-          <h3 className="font-semibold mb-1">View Analytics</h3>
-          <p className="text-white/80 text-sm">Detailed platform analytics</p>
-        </Link>
       </div>
 
       {/* Recent Activity */}
-      <div className="bg-white rounded-2xl p-6 shadow-soft">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Activity</h2>
-        <div className="space-y-3">
-          {recentActivity.map((activity) => (
-            <div key={activity.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl">
-              <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                activity.status === 'success' ? 'bg-green-100' :
-                activity.status === 'pending' ? 'bg-amber-100' :
-                activity.status === 'warning' ? 'bg-red-100' :
-                'bg-blue-100'
-              }`}>
-                {activity.status === 'success' ? <CheckCircle className="w-5 h-5 text-green-600" /> :
-                 activity.status === 'pending' ? <AlertCircle className="w-5 h-5 text-amber-600" /> :
-                 activity.status === 'warning' ? <AlertCircle className="w-5 h-5 text-red-600" /> :
-                 <Star className="w-5 h-5 text-blue-600" />}
-              </div>
-              <div className="flex-1">
-                <p className="text-sm text-gray-900">{activity.message}</p>
-                <p className="text-xs text-gray-500">{activity.time}</p>
-              </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Recent Bookings */}
+        <div className="bg-white rounded-2xl p-6 shadow-soft">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold text-gray-900">Recent Bookings</h2>
+            <Link href="/admin/bookings" className="text-primary hover:text-primary/80 text-sm font-medium">
+              View All
+            </Link>
+          </div>
+          {recentBookings.length === 0 ? (
+            <div className="text-center py-8">
+              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <p className="text-gray-500 text-sm">No recent bookings</p>
             </div>
-          ))}
+          ) : (
+            <div className="space-y-3">
+              {recentBookings.slice(0, 5).map((booking: any) => (
+                <div key={booking._id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                  <div className="w-10 h-10 bg-primary/10 rounded-lg flex items-center justify-center text-lg">
+                    📅
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-gray-900 truncate text-sm">
+                      {booking.studentId?.name || 'Student'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      with {booking.tutorId?.userId?.name || 'Tutor'} - {booking.subject}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${
+                      booking.status === 'pending' ? 'bg-amber-100 text-amber-700' :
+                      booking.status === 'confirmed' ? 'bg-green-100 text-green-700' :
+                      booking.status === 'completed' ? 'bg-blue-100 text-blue-700' :
+                      'bg-red-100 text-red-700'
+                    }`}>
+                      {booking.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Recent Reviews */}
+        <div className="bg-white rounded-2xl p-6 shadow-soft">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Reviews</h2>
+          {recentReviews.length === 0 ? (
+            <div className="text-center py-8">
+              <Star className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+              <p className="text-gray-500 text-sm">No reviews yet</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {recentReviews.slice(0, 5).map((review: any) => (
+                <div key={review._id} className="p-3 bg-gray-50 rounded-xl">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="font-medium text-gray-900 text-sm">
+                      {review.studentId?.name || 'Student'} → {review.tutorId?.userId?.name || 'Tutor'}
+                    </p>
+                    <div className="flex gap-0.5">
+                      {Array.from({ length: 5 }).map((_, i) => (
+                        <Star
+                          key={i}
+                          className={`w-3 h-3 ${
+                            i < review.rating ? 'text-amber-400 fill-amber-400' : 'text-gray-200'
+                          }`}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 line-clamp-2">{review.comment}</p>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
