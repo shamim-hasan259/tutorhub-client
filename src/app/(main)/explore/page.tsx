@@ -25,7 +25,9 @@ const sortOptions = [
   { value: 'rating', label: 'Highest Rated' },
   { value: 'price-low', label: 'Price: Low to High' },
   { value: 'price-high', label: 'Price: High to Low' },
+  { value: 'name', label: 'Name (A-Z)' },
   { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Date Added' },
   { value: 'students', label: 'Most Students' },
 ];
 
